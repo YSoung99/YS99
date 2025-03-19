@@ -244,11 +244,8 @@
         const targetLanguageSelect = document.getElementById('target-language-select');
 
         // 로컬 스토리지에서 API 키 불러오기
-        let API_KEY = "YOUR_API_KEY"; // 여기에 API 키를 넣으세요
-        API_KEY = '';
+        let API_KEY = localStorage.getItem('gemini_api_key') || '';
         apiKeyInput.value = API_KEY; // Load stored API key on page load
-        apiKeyInput.style.display = 'none';
-        saveApiKeyButton.style.display = 'none';
 
         // Gemini API 키를 여기에 입력하세요.
         let API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
@@ -384,7 +381,7 @@
 
         async function translateText() {
             const sourceText = sourceTextarea.value.trim();
-            //API_KEY = apiKeyInput.value.trim();
+            API_KEY = apiKeyInput.value.trim();
             const sourceLanguage = sourceLanguageSelect.value;
             const targetLanguage = targetLanguageSelect.value;
 
