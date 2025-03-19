@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -28,11 +29,12 @@
             border: 1px solid #e5e7eb;
             border-radius: 0.375rem;
             margin-bottom: 0.5rem;
-            resize: none;
+            resize: both; /* 크기 조절 가능하게 변경 */
             font-size: 1rem;
             line-height: 1.5rem;
             width: 100%;
             box-sizing: border-box;
+            min-height: 120px; /* 최소 높이 설정 */
         }
         .input-output-group textarea:focus {
             outline: none;
@@ -86,10 +88,11 @@
             background-color: #f9fafb;
             font-size: 1rem;
             line-height: 1.5rem;
-            min-height: 4rem;
+            min-height: 120px; /* 최소 높이 설정 */
             text-align: left;
             width: 100%;
             box-sizing: border-box;
+            resize: both; /* 크기 조절 가능하게 변경 */
         }
         .error-message {
             color: #dc2626;
@@ -207,6 +210,51 @@
         #swap-languages-button:hover {
             background-color: #2563eb;
         }
+        
+        /* 복사 버튼 스타일 추가 */
+        .copy-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+        
+        .copy-button:hover {
+            opacity: 1;
+        }
+        
+        /* 결과 영역에 상대 위치 지정 */
+        .result-container {
+            position: relative;
+            width: 100%;
+        }
+        
+        /* 복사 성공 메시지 */
+        .copy-feedback {
+            position: absolute;
+            top: -30px;
+            right: 10px;
+            background-color: #4ade80;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .copy-feedback.show {
+            opacity: 1;
+        }
+        
         @media (max-width: 640px) {
             .container {
                 padding: 1rem;
@@ -274,8 +322,14 @@
         </div>
 
         <div class="input-output-group">
-            <textarea id="source-text" placeholder="번역할 텍스트를 입력하세요." rows="4" class="w-full"></textarea>
-            <textarea id="translation-result" placeholder="번역 결과가 여기에 표시됩니다." rows="4" class="w-full" readonly></textarea>
+            <textarea id="source-text" placeholder="번역할 텍스트를 입력하세요." rows="6" class="w-full"></textarea>
+            
+            <div class="result-container">
+                <textarea id="translation-result" placeholder="번역 결과가 여기에 표시됩니다." rows="6" class="w-full" readonly></textarea>
+                <button id="copy-button" class="copy-button">복사하기</button>
+                <div id="copy-feedback" class="copy-feedback">복사되었습니다!</div>
+            </div>
+            
             <p id="error-message" class="text-red-500"></p>
         </div>
 
@@ -311,6 +365,8 @@
         const topPValueDisplay = document.getElementById('top-p-value');
         const saveApiKeyButton = document.getElementById('save-api-key');
         const swapLanguagesButton = document.getElementById('swap-languages-button');
+        const copyButton = document.getElementById('copy-button');
+        const copyFeedback = document.getElementById('copy-feedback');
 
         // 로컬 스토리지에서 API 키 불러오기
         let API_KEY = localStorage.getItem('gemini_api_key') || '';
@@ -455,6 +511,26 @@
             targetLanguageSelect.value = sourceLanguageValue;
 
             translateText();
+        });
+
+        // 복사 버튼 기능
+        copyButton.addEventListener('click', () => {
+            const textToCopy = translationResultArea.value;
+            if (!textToCopy) return;
+            
+            // 텍스트 복사하기
+            navigator.clipboard.writeText(textToCopy)
+                .then(() => {
+                    // 복사 성공 시 피드백 보여주기
+                    copyFeedback.classList.add('show');
+                    setTimeout(() => {
+                        copyFeedback.classList.remove('show');
+                    }, 2000);
+                })
+                .catch(err => {
+                    console.error('클립보드 복사 실패:', err);
+                    alert('복사하지 못했습니다. 수동으로 복사해주세요.');
+                });
         });
 
         clearButton.addEventListener('click', clearInputAndResult);
