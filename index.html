@@ -143,7 +143,7 @@
         .language-select-group {
             display: flex;
             justify-content: center;
-            align-items: center; /* Added for vertical alignment */
+            align-items: center;
             margin-bottom: 1.5rem;
         }
         .language-select-group select {
@@ -191,18 +191,18 @@
         #swap-languages-button {
             background-color: #3b82f6;
             color: #fff;
-            border-radius: 9999px; /* Make it a circle */
-            width: 2.5rem; /* 40px */
-            height: 2.5rem; /* 40px */
+            border-radius: 9999px;
+            width: 2.5rem;
+            height: 2.5rem;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             transition: background-color 0.3s ease;
-            margin: 0 0.75rem; /* 12px */
-            font-size: 1.25rem; /* 20px */
+            margin: 0 0.75rem;
+            font-size: 1.25rem;
             border: none;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Add shadow */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
         #swap-languages-button:hover {
             background-color: #2563eb;
@@ -273,6 +273,16 @@
             </select>
         </div>
 
+        <div class="input-output-group">
+            <textarea id="source-text" placeholder="번역할 텍스트를 입력하세요." rows="4" class="w-full"></textarea>
+            <textarea id="translation-result" placeholder="번역 결과가 여기에 표시됩니다." rows="4" class="w-full" readonly></textarea>
+            <p id="error-message" class="text-red-500"></p>
+        </div>
+
+        <div class="button-group">
+            <button id="clear-button" class="clear-button">초기화</button>
+        </div>
+
         <div class="parameter-group">
             <label for="temperature-slider">Temperature (0.0 - 1.0):</label>
             <input type="range" id="temperature-slider" min="0" max="100" value="70">
@@ -284,23 +294,11 @@
             <input type="range" id="top-p-slider" min="0" max="100" value="95">
             <p id="top-p-value" class="parameter-value">0.95</p>
         </div>
-
-        <div class="input-output-group">
-            <textarea id="source-text" placeholder="번역할 텍스트를 입력하세요." rows="4" class="w-full"></textarea>
-            <textarea id="translation-result" placeholder="번역 결과가 여기에 표시됩니다." rows="4" class="w-full" readonly></textarea>
-            <p id="error-message" class="text-red-500"></p>
-        </div>
-
-        <div class="button-group">
-            <button id="translate-button" class="translate-button">번역하기</button>
-            <button id="clear-button" class="clear-button">초기화</button>
-        </div>
     </div>
 
     <script>
         const sourceTextarea = document.getElementById('source-text');
         const translationResultArea = document.getElementById('translation-result');
-        const translateButton = document.getElementById('translate-button');
         const clearButton = document.getElementById('clear-button');
         const errorMessage = document.getElementById('error-message');
         const apiKeyInput = document.getElementById('api-key-input');
@@ -322,13 +320,13 @@
         // const API_KEY = 'YOUR_API_KEY'; // 여기에 API 키를 넣으세요
         let API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
 
-        let temperature = 0.7;  // 추천값으로 변경
-        let topP = 0.95;      // 추천값으로 변경
+        let temperature = 0.7;
+        let topP = 0.95;
 
-        temperatureSlider.value = 70; // 슬라이더 위치 변경
-        temperatureValueDisplay.textContent = '0.7'; // 표시값 변경
-        topPSlider.value = 95;       // 슬라이더 위치 변경
-        topPValueDisplay.textContent = '0.95';           // 표시값 변경
+        temperatureSlider.value = 70;
+        temperatureValueDisplay.textContent = '0.7';
+        topPSlider.value = 95;
+        topPValueDisplay.textContent = '0.95';
 
         temperatureSlider.addEventListener('input', (event) => {
             temperature = parseFloat(event.target.value) / 100;
@@ -361,6 +359,12 @@
             localStorage.removeItem('gemini_api_key');
         }
 
+        let typingTimeout;
+        sourceTextarea.addEventListener('input', () => {
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(translateText, 500);
+        });
+
         async function translateText() {
             const sourceText = sourceTextarea.value.trim();
             const sourceLanguage = sourceLanguageSelect.value;
@@ -373,7 +377,7 @@
             }
 
             if (!sourceText) {
-                showError('번역할 텍스트를 입력해주세요.');
+                translationResultArea.value = '';
                 return;
             }
 
@@ -449,9 +453,10 @@
             // Swap the values
             sourceLanguageSelect.value = targetLanguageValue;
             targetLanguageSelect.value = sourceLanguageValue;
+
+            translateText();
         });
 
-        translateButton.addEventListener('click', translateText);
         clearButton.addEventListener('click', clearInputAndResult);
     </script>
 </body>
