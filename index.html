@@ -1,710 +1,263 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini 번역기</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --primary-color: #3b82f6;
-            --primary-hover: #2563eb;
-            --text-color: #374151;
-            --bg-color: #f9fafb;
-            --border-color: #e5e7eb;
-            --error-color: #dc2626;
-            --card-bg: #ffffff;
-            --secondary-bg: #f3f4f6;
-            --secondary-text: #6b7280;
-        }
+// script 태그 내에 다음 코드를 추가하세요 (registerEventListeners 함수 내부)
 
-        .dark-mode {
-            --primary-color: #60a5fa;
-            --primary-hover: #3b82f6;
-            --text-color: #e5e7eb;
-            --bg-color: #111827;
-            --border-color: #374151;
-            --error-color: #ef4444;
-            --card-bg: #1f2937;
-            --secondary-bg: #374151;
-            --secondary-text: #9ca3af;
-        }
+// 탭 전환 기능
+tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        // 활성 탭 버튼 변경
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+        
+        // 탭 컨텐츠 전환
+        const tabId = button.getAttribute('data-tab');
+        tabContents.forEach(content => {
+            content.classList.remove('active');
+            if (content.id === `${tabId}-tab`) {
+                content.classList.add('active');
+            }
+        });
+    });
+});
 
-        * {
-            box-sizing: border-box;
-            transition: background-color 0.3s ease, color 0.3s ease;
+// 다음 코드도 registerEventListeners 함수에 추가
+// 설정 저장 버튼
+saveSettingsButton.addEventListener('click', () => {
+    API_KEY = apiKeyInput.value.trim();
+    selectedModel = modelSelect.value;
+    
+    // 로컬 스토리지에 설정 저장
+    localStorage.setItem('gemini_api_key', API_KEY);
+    localStorage.setItem('translator_temperature', temperature);
+    localStorage.setItem('translator_top_p', topP);
+    localStorage.setItem('translator_model', selectedModel);
+    
+    alert('설정이 저장되었습니다.');
+});
+
+// 다크 모드 토글
+themeToggle.addEventListener('change', () => {
+    isDarkMode = themeToggle.checked;
+    if (isDarkMode) {
+        document.body.classList.add('dark-mode');
+    } else {
+        document.body.classList.remove('dark-mode');
+    }
+    localStorage.setItem('translator_dark_mode', isDarkMode);
+});
+
+// 지우기 버튼
+clearSourceButton.addEventListener('click', () => {
+    sourceTextarea.value = '';
+    translationResultArea.value = '';
+    currentlyDetectedLanguage = null;
+});
+
+// 복사 버튼
+copyResultButton.addEventListener('click', () => {
+    const text = translationResultArea.value;
+    if (text) {
+        navigator.clipboard.writeText(text)
+            .then(() => {
+                // 임시 표시 효과
+                const originalText = copyResultButton.querySelector('.tooltip-text').textContent;
+                copyResultButton.querySelector('.tooltip-text').textContent = '복사됨!';
+                setTimeout(() => {
+                    copyResultButton.querySelector('.tooltip-text').textContent = originalText;
+                }, 1500);
+            })
+            .catch(err => {
+                console.error('텍스트 복사 실패:', err);
+            });
+    }
+});
+
+// 음성 읽기 버튼
+speakResultButton.addEventListener('click', () => {
+    const text = translationResultArea.value;
+    if (text && 'speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        
+        // 언어 설정
+        const targetLang = targetLanguageSelect.value;
+        switch (targetLang) {
+            case 'ko':
+                utterance.lang = 'ko-KR';
+                break;
+            case 'en':
+                utterance.lang = 'en-US';
+                break;
+            case 'ja':
+                utterance.lang = 'ja-JP';
+                break;
+            default:
+                utterance.lang = 'en-US';
         }
         
-        body {
-            font-family: 'Inter', sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-color);
-            color: var(--text-color);
+        speechSynthesis.speak(utterance);
+    }
+});
+
+// 번역 기록 지우기
+clearHistoryButton.addEventListener('click', () => {
+    if (confirm('모든 번역 기록을 지우시겠습니까?')) {
+        translationHistory = [];
+        localStorage.setItem('translator_history', JSON.stringify(translationHistory));
+        renderTranslationHistory();
+    }
+});
+
+// 다음 함수도 추가해야 합니다 (script 태그 내부, 기존 함수들 외부에)
+
+// 번역 기록 표시 함수
+function renderTranslationHistory() {
+    if (translationHistory.length === 0) {
+        historyList.innerHTML = '<div class="history-empty">번역 기록이 없습니다.</div>';
+        return;
+    }
+    
+    historyList.innerHTML = '';
+    translationHistory.reverse().forEach((item, index) => {
+        const historyItem = document.createElement('div');
+        historyItem.className = 'history-item';
+        historyItem.addEventListener('click', () => {
+            // 기록 항목을 클릭하면 번역기로 복원
+            sourceLanguageSelect.value = item.sourceLanguage;
+            targetLanguageSelect.value = item.targetLanguage;
+            sourceTextarea.value = item.sourceText;
+            translationResultArea.value = item.translationResult;
+            currentlyDetectedLanguage = item.detectedLanguage;
+            
+            // 번역기 탭으로 전환
+            tabButtons.forEach(btn => {
+                if (btn.getAttribute('data-tab') === 'translator') {
+                    btn.click();
+                }
+            });
+        });
+        
+        const langNames = {
+            'ko': '한국어',
+            'en': '영어',
+            'ja': '일본어',
+            'auto': '자동 감지'
+        };
+        
+        const sourceLangName = item.sourceLanguage === 'auto' && item.detectedLanguage
+            ? `자동 감지 (${langNames[item.detectedLanguage] || item.detectedLanguage})`
+            : langNames[item.sourceLanguage] || item.sourceLanguage;
+        const targetLangName = langNames[item.targetLanguage] || item.targetLanguage;
+        
+        historyItem.innerHTML = `
+            <div class="history-languages">
+                <span class="language-badge ${item.sourceLanguage === 'auto' ? 'auto-detect-badge' : ''}">${sourceLangName}</span>
+                → 
+                <span class="language-badge">${targetLangName}</span>
+            </div>
+            <div class="history-text">${item.sourceText}</div>
+        `;
+        
+        historyList.appendChild(historyItem);
+    });
+}
+
+// 번역 함수
+async function translateText() {
+    const sourceText = sourceTextarea.value.trim();
+    const sourceLanguage = sourceLanguageSelect.value;
+    const targetLanguage = targetLanguageSelect.value;
+    
+    if (!sourceText) return;
+    if (!API_KEY) {
+        errorMessage.textContent = "API 키를 입력해주세요.";
+        return;
+    }
+    
+    try {
+        errorMessage.textContent = "";
+        translationResultArea.value = "번역 중...";
+        
+        const prompt = `다음 텍스트를 ${sourceLanguage === 'auto' ? '감지된 언어에서' : getLanguageName(sourceLanguage) + '에서'} ${getLanguageName(targetLanguage)}(으)로 번역해주세요. 
+번역만 제공하고 다른 설명은 하지 마세요:
+
+${sourceText}`;
+        
+        const response = await fetch(`${API_URL}${selectedModel}:generateContent?key=${API_KEY}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{
+                        text: prompt
+                    }]
+                }],
+                generationConfig: {
+                    temperature: temperature,
+                    topP: topP
+                }
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.error.message || "API 오류가 발생했습니다.");
         }
         
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 1rem;
-            text-align: center;
-        }
-
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        .app-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: var(--text-color);
-        }
-
-        .settings-panel {
-            background-color: var(--card-bg);
-            border-radius: 0.5rem;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .translator-container {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
-        .language-controls {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .language-select {
-            padding: 0.75rem;
-            border: 1px solid var(--border-color);
-            border-radius: 0.375rem;
-            background-color: var(--card-bg);
-            color: var(--text-color);
-            font-size: 1rem;
-            flex: 1;
-            max-width: 150px;
-        }
-
-        .language-select:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-        }
-
-        .swap-button {
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 9999px;
-            width: 2.5rem;
-            height: 2.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-            font-size: 1.25rem;
-        }
-
-        .swap-button:hover {
-            background-color: var(--primary-hover);
-        }
-
-        .text-area-container {
-            position: relative;
-            flex: 1;
-        }
-
-        .textarea {
-            width: 100%;
-            padding: 1rem;
-            border: 1px solid var(--border-color);
-            border-radius: 0.375rem;
-            resize: none;
-            font-size: 1rem;
-            line-height: 1.5;
-            background-color: var(--card-bg);
-            color: var(--text-color);
-            min-height: 120px;
-        }
-
-        .textarea:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-        }
-
-        .textarea-readonly {
-            background-color: var(--secondary-bg);
-        }
-
-        .textarea-controls {
-            position: absolute;
-            right: 0.5rem;
-            bottom: 0.5rem;
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .icon-button {
-            background-color: transparent;
-            border: none;
-            color: var(--secondary-text);
-            cursor: pointer;
-            padding: 0.25rem;
-            border-radius: 0.25rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .icon-button:hover {
-            background-color: rgba(0, 0, 0, 0.05);
-            color: var(--primary-color);
-        }
-
-        .dark-mode .icon-button:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-
-        .button {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 0.375rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-            font-size: 1rem;
-        }
-
-        .primary-button {
-            background-color: var(--primary-color);
-            color: white;
-        }
-
-        .primary-button:hover {
-            background-color: var(--primary-hover);
-        }
-
-        .secondary-button {
-            background-color: var(--secondary-bg);
-            color: var(--text-color);
-        }
-
-        .secondary-button:hover {
-            background-color: var(--border-color);
-        }
-
-        .api-form {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-            max-width: 500px;
-            margin: 0 auto;
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-            text-align: left;
-        }
-
-        .form-label {
-            font-size: 0.875rem;
-            color: var(--secondary-text);
-        }
-
-        .form-input {
-            padding: 0.75rem;
-            border: 1px solid var(--border-color);
-            border-radius: 0.375rem;
-            font-size: 1rem;
-            background-color: var(--card-bg);
-            color: var(--text-color);
-        }
-
-        .form-input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-        }
-
-        .slider-container {
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-        }
-
-        .slider-info {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.875rem;
-        }
-
-        .slider {
-            width: 100%;
-            height: 0.5rem;
-            border-radius: 9999px;
-            -webkit-appearance: none;
-            appearance: none;
-            background-color: var(--border-color);
-            outline: none;
-        }
-
-        .slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 1rem;
-            height: 1rem;
-            border-radius: 50%;
-            background-color: var(--primary-color);
-            cursor: pointer;
-        }
-
-        .slider::-moz-range-thumb {
-            width: 1rem;
-            height: 1rem;
-            border-radius: 50%;
-            background-color: var(--primary-color);
-            cursor: pointer;
-            border: none;
-        }
-
-        .error-message {
-            color: var(--error-color);
-            font-size: 0.875rem;
-            margin-top: 0.5rem;
-        }
-
-        .tab-buttons {
-            display: flex;
-            margin-bottom: 1rem;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .tab-button {
-            padding: 0.75rem 1rem;
-            background: none;
-            border: none;
-            border-bottom: 2px solid transparent;
-            cursor: pointer;
-            font-weight: 500;
-            color: var(--secondary-text);
-        }
-
-        .tab-button.active {
-            color: var(--primary-color);
-            border-bottom-color: var(--primary-color);
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .history-container {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-            max-height: 300px;
-            overflow-y: auto;
-            padding: 0.5rem;
-        }
-
-        .history-item {
-            background-color: var(--card-bg);
-            border-radius: 0.375rem;
-            padding: 0.75rem;
-            cursor: pointer;
-            border: 1px solid var(--border-color);
-            text-align: left;
-        }
-
-        .history-item:hover {
-            border-color: var(--primary-color);
-        }
-
-        .history-languages {
-            font-size: 0.75rem;
-            color: var(--secondary-text);
-            margin-bottom: 0.25rem;
-        }
-
-        .history-text {
-            font-size: 0.875rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .history-empty {
-            color: var(--secondary-text);
-            font-style: italic;
-            text-align: center;
-            padding: 1rem;
-        }
-
-        .language-badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            background-color: var(--secondary-bg);
-            margin-right: 0.25rem;
-        }
-
-        .auto-detect-badge {
-            background-color: rgba(59, 130, 246, 0.2);
-            color: var(--primary-color);
-        }
-
-        .flex-row {
-            display: flex;
-            gap: 0.75rem;
-            align-items: center;
-        }
-
-        .toggle-container {
-            display: flex;
-            align-items: center;
-        }
-
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 48px;
-            height: 24px;
-        }
-
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .toggle-slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: var(--secondary-bg);
-            transition: .4s;
-            border-radius: 24px;
-        }
-
-        .toggle-slider:before {
-            position: absolute;
-            content: "";
-            height: 18px;
-            width: 18px;
-            left: 3px;
-            bottom: 3px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-
-        input:checked + .toggle-slider {
-            background-color: var(--primary-color);
-        }
-
-        input:checked + .toggle-slider:before {
-            transform: translateX(24px);
-        }
-
-        .toggle-label {
-            margin-left: 0.5rem;
-            font-size: 0.875rem;
-            color: var(--secondary-text);
-        }
-
-        .tooltip {
-            position: relative;
-            display: inline-block;
-        }
-
-        .tooltip .tooltip-text {
-            visibility: hidden;
-            width: 120px;
-            background-color: var(--secondary-bg);
-            color: var(--text-color);
-            text-align: center;
-            border-radius: 6px;
-            padding: 5px;
-            position: absolute;
-            z-index: 1;
-            bottom: 125%;
-            left: 50%;
-            margin-left: -60px;
-            opacity: 0;
-            transition: opacity 0.3s;
-            font-size: 0.75rem;
-        }
-
-        .tooltip:hover .tooltip-text {
-            visibility: visible;
-            opacity: 1;
-        }
-
-        @media (min-width: 640px) {
-            .translator-container {
-                flex-direction: row;
-            }
-        }
-
-        @media (max-width: 639px) {
-            .language-controls {
-                flex-direction: column;
+        // 응답에서 번역 결과 추출
+        if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+            const translationResult = data.candidates[0].content.parts[0].text.trim();
+            translationResultArea.value = translationResult;
+            
+            // 감지된 언어 확인 (있을 경우)
+            if (data.candidates[0].content.parts[0].citationMetadata && 
+                data.candidates[0].content.parts[0].citationMetadata.detectedLanguage) {
+                currentlyDetectedLanguage = data.candidates[0].content.parts[0].citationMetadata.detectedLanguage.languageCode;
             }
             
-            .language-select {
-                max-width: 100%;
+            // 번역 기록에 추가
+            const historyItem = {
+                sourceLanguage,
+                targetLanguage,
+                sourceText,
+                translationResult,
+                detectedLanguage: currentlyDetectedLanguage,
+                timestamp: new Date().getTime()
+            };
+            
+            // 중복 항목 제거
+            translationHistory = translationHistory.filter(item => 
+                item.sourceText !== sourceText || 
+                item.targetLanguage !== targetLanguage
+            );
+            
+            // 최대 20개까지 저장
+            translationHistory.push(historyItem);
+            if (translationHistory.length > 20) {
+                translationHistory.shift();
             }
             
-            .swap-button {
-                transform: rotate(90deg);
-                margin: 0.5rem 0;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <div class="app-title">Gemini 번역기</div>
-            <div class="toggle-container">
-                <label class="toggle-switch">
-                    <input type="checkbox" id="theme-toggle">
-                    <span class="toggle-slider"></span>
-                </label>
-                <span class="toggle-label">다크 모드</span>
-            </div>
-        </header>
-
-        <div class="tab-buttons">
-            <button class="tab-button active" data-tab="translator">번역기</button>
-            <button class="tab-button" data-tab="history">번역 기록</button>
-            <button class="tab-button" data-tab="settings">설정</button>
-        </div>
-
-        <div class="tab-content active" id="translator-tab">
-            <div class="language-controls">
-                <div class="language-select-wrapper">
-                    <select id="source-language-select" class="language-select">
-                        <option value="auto">자동 감지</option>
-                        <option value="ko">한국어</option>
-                        <option value="en">영어</option>
-                        <option value="ja">일본어</option>
-                    </select>
-                </div>
-                <button id="swap-languages-button" class="swap-button">⇄</button>
-                <div class="language-select-wrapper">
-                    <select id="target-language-select" class="language-select">
-                        <option value="ko">한국어</option>
-                        <option value="en">영어</option>
-                        <option value="ja">일본어</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="translator-container">
-                <div class="text-area-container">
-                    <textarea id="source-text" class="textarea" placeholder="번역할 텍스트를 입력하세요."></textarea>
-                    <div class="textarea-controls">
-                        <button id="clear-source-button" class="icon-button tooltip">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
-                                <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
-                            </svg>
-                            <span class="tooltip-text">지우기</span>
-                        </button>
-                    </div>
-                </div>
-                <div class="text-area-container">
-                    <textarea id="translation-result" class="textarea textarea-readonly" placeholder="번역 결과가 여기에 표시됩니다." readonly></textarea>
-                    <div class="textarea-controls">
-                        <button id="copy-result-button" class="icon-button tooltip">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
-                                <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
-                            </svg>
-                            <span class="tooltip-text">복사</span>
-                        </button>
-                        <button id="speak-result-button" class="icon-button tooltip">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                <path d="M11.536 14.01A8.473 8.473 0 0 0 14.026 8a8.473 8.473 0 0 0-2.49-6.01l-.708.707A7.476 7.476 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303l.708.707z"/>
-                                <path d="M10.121 12.596A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.596l-.707.707A5.483 5.483 0 0 1 11.025 8a5.483 5.483 0 0 1-1.61 3.89l.706.706z"/>
-                                <path d="M8.707 11.182A4.486 4.486 0 0 0 10.025 8a4.486 4.486 0 0 0-1.318-3.182L8 5.525A3.489 3.489 0 0 1 9.025 8 3.49 3.49 0 0 1 8 10.475l.707.707zM6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06z"/>
-                            </svg>
-                            <span class="tooltip-text">듣기</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <p id="error-message" class="error-message"></p>
-        </div>
-
-        <div class="tab-content" id="history-tab">
-            <div class="history-container" id="history-list">
-                <div class="history-empty">번역 기록이 없습니다.</div>
-            </div>
-            <button id="clear-history-button" class="button secondary-button" style="margin-top: 1rem;">기록 지우기</button>
-        </div>
-
-        <div class="tab-content" id="settings-tab">
-            <div class="settings-panel">
-                <div class="api-form">
-                    <div class="form-group">
-                        <label class="form-label" for="api-key-input">Gemini API 키</label>
-                        <input type="text" id="api-key-input" class="form-input" placeholder="API 키를 입력하세요">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="model-select">모델 선택</label>
-                        <select id="model-select" class="form-input">
-                            <option value="gemini-2.0-flash-001">gemini-2.0-flash-001</option>
-                            <option value="gemini-2.0-flash-thinking-exp-01-21">gemini-2.0-flash-thinking-exp-01-21</option>
-                            <option value="gemini-2.0-pro-exp-02-05">gemini-2.0-pro-exp-02-05</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="temperature-slider">Temperature</label>
-                        <div class="slider-container">
-                            <div class="slider-info">
-                                <span>정확한 번역 (0.0)</span>
-                                <span id="temperature-value">0.7</span>
-                                <span>창의적 번역 (1.0)</span>
-                            </div>
-                            <input type="range" id="temperature-slider" class="slider" min="0" max="100" value="70">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="top-p-slider">Top-p</label>
-                        <div class="slider-container">
-                            <div class="slider-info">
-                                <span>결정적 (0.0)</span>
-                                <span id="top-p-value">0.95</span>
-                                <span>다양한 (1.0)</span>
-                            </div>
-                            <input type="range" id="top-p-slider" class="slider" min="0" max="100" value="95">
-                        </div>
-                    </div>
-                    <button id="save-settings-button" class="button primary-button">설정 저장</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // DOM 요소
-        const sourceTextarea = document.getElementById('source-text');
-        const translationResultArea = document.getElementById('translation-result');
-        const errorMessage = document.getElementById('error-message');
-        const apiKeyInput = document.getElementById('api-key-input');
-        const modelSelect = document.getElementById('model-select');
-        const sourceLanguageSelect = document.getElementById('source-language-select');
-        const targetLanguageSelect = document.getElementById('target-language-select');
-        const temperatureSlider = document.getElementById('temperature-slider');
-        const temperatureValueDisplay = document.getElementById('temperature-value');
-        const topPSlider = document.getElementById('top-p-slider');
-        const topPValueDisplay = document.getElementById('top-p-value');
-        const saveSettingsButton = document.getElementById('save-settings-button');
-        const swapLanguagesButton = document.getElementById('swap-languages-button');
-        const clearSourceButton = document.getElementById('clear-source-button');
-        const copyResultButton = document.getElementById('copy-result-button');
-        const speakResultButton = document.getElementById('speak-result-button');
-        const themeToggle = document.getElementById('theme-toggle');
-        const clearHistoryButton = document.getElementById('clear-history-button');
-        const historyList = document.getElementById('history-list');
-        const tabButtons = document.querySelectorAll('.tab-button');
-        const tabContents = document.querySelectorAll('.tab-content');
-
-        // 설정 값
-        let API_KEY = localStorage.getItem('gemini_api_key') || '';
-        let API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
-        let temperature = parseFloat(localStorage.getItem('translator_temperature')) || 0.7;
-        let topP = parseFloat(localStorage.getItem('translator_top_p')) || 0.95;
-        let selectedModel = localStorage.getItem('translator_model') || 'gemini-2.0-flash-001';
-        let isDarkMode = localStorage.getItem('translator_dark_mode') === 'true';
-        let translationHistory = JSON.parse(localStorage.getItem('translator_history') || '[]');
-        let currentlyDetectedLanguage = null;
-
-        // 초기화
-        function initializeApp() {
-            // 저장된 값 불러오기
-            apiKeyInput.value = API_KEY;
-            modelSelect.value = selectedModel;
-            temperatureSlider.value = temperature * 100;
-            temperatureValueDisplay.textContent = temperature.toFixed(2);
-            topPSlider.value = topP * 100;
-            topPValueDisplay.textContent = topP.toFixed(2);
-            themeToggle.checked = isDarkMode;
-            
-            // 다크모드 적용
-            if (isDarkMode) {
-                document.body.classList.add('dark-mode');
-            }
-            
-            // 번역 기록 표시
+            localStorage.setItem('translator_history', JSON.stringify(translationHistory));
             renderTranslationHistory();
-            
-            // 이벤트 리스너 등록
-            registerEventListeners();
+        } else {
+            throw new Error("응답에서 번역 결과를 찾을 수 없습니다.");
         }
+    } catch (error) {
+        console.error("번역 오류:", error);
+        translationResultArea.value = "";
+        errorMessage.textContent = `오류: ${error.message}`;
+    }
+}
 
-        function registerEventListeners() {
-            // 설정 값 변경 이벤트
-            temperatureSlider.addEventListener('input', (event) => {
-                temperature = parseFloat(event.target.value) / 100;
-                temperatureValueDisplay.textContent = temperature.toFixed(2);
-            });
+// 언어 이름 반환 함수
+function getLanguageName(langCode) {
+    const langMap = {
+        'ko': '한국어',
+        'en': '영어',
+        'ja': '일본어'
+    };
+    return langMap[langCode] || langCode;
+}
 
-            topPSlider.addEventListener('input', (event) => {
-                topP = parseFloat(event.target.value) / 100;
-                topPValueDisplay.textContent = topP.toFixed(2);
-            });
-
-            // 텍스트 입력 이벤트 (디바운싱)
-            let typingTimeout;
-            sourceTextarea.addEventListener('input', () => {
-                clearTimeout(typingTimeout);
-                typingTimeout = setTimeout(() => {
-                    const sourceText = sourceTextarea.value.trim();
-                    if (sourceText) {
-                        translateText();
-                    } else {
-                        translationResultArea.value = '';
-                        errorMessage.textContent = '';
-                    }
-                }, 500);
-            });
-
-            // 언어 교환 버튼
-            swapLanguagesButton.addEventListener('click', () => {
-                // 자동 감지 모드일 경우 처리
-                if (sourceLanguageSelect.value === 'auto') {
-                    if (currentlyDetectedLanguage) {
-                        sourceLanguageSelect.value = targetLanguageSelect.value;
-                        targetLanguageSelect.value = currentlyDetectedLanguage;
-                    } else {
-                        // 감지된 언어가 없으면 기본 값으로
-                        sourceLanguageSelect.value = targetLanguageSelect
+// 앱 초기화
+document.addEventListener('DOMContentLoaded', initializeApp);
