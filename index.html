@@ -244,11 +244,129 @@
         const targetLanguageSelect = document.getElementById('target-language-select');
 
         // 로컬 스토리지에서 API 키 불러오기
-        let API_KEY = localStorage.getItem('gemini_api_key') || '';
+        let API_KEY = "YOUR_API_KEY"; // 여기에 API 키를 넣으세요
+        API_KEY = 'AIzaSyA6XKjaVZUHjMW4y0f29--EfJ_-4S5VqXA';
         apiKeyInput.value = API_KEY; // Load stored API key on page load
+        apiKeyInput.style.display = 'none';
+        saveApiKeyButton.style.display = 'none';
 
         // Gemini API 키를 여기에 입력하세요.
         let API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
+
+        // 자주 사용하는 비즈니스 용어 (한국어 - 영어)
+        const BUSINESS_TERMS = {
+            "협업": "collaboration",
+            "프로젝트": "project",
+            "회의": "meeting",
+            "발표": "presentation",
+            "보고서": "report",
+            "검토": "review",
+            "일정": "schedule",
+            "마감일": "deadline",
+            "요청": "request",
+            "확인": "confirmation",
+            "논의": "discussion",
+            "결정": "decision",
+            "계약": "contract",
+            "예산": "budget",
+            "성과": "performance",
+            "목표": "goal",
+            "전략": "strategy",
+            "혁신": "innovation",
+            "성장": "growth",
+            "시장": "market",
+            "고객": "customer",
+            "제품": "product",
+            "서비스": "service",
+            "데이터": "data",
+            "정보": "information",
+            "기술": "technology",
+            "개발": "development",
+            "관리": "management",
+            "운영": "operation",
+            "영업": "sales",
+            "마케팅": "marketing",
+            "재무": "finance",
+            "회계": "accounting",
+            "인사": "human resources",
+            "법률": "legal",
+            "지원": "support",
+            "문의": "inquiry",
+            "주문": "order",
+            "배송": "delivery",
+            "피드백": "feedback",
+            "개선": "improvement",
+            "성공": "success",
+            "실패": "failure",
+            "위험": "risk",
+            "기회": "opportunity",
+            "비용": "cost",
+            "수익": "profit",
+            "투자": "investment",
+            "분석": "analysis",
+            "평가": "evaluation",
+            "경쟁": "competition",
+            "협상": "negotiation",
+            "승인": "approval",
+            "진행": "progress",
+            "결과": "result",
+            "책임": "responsibility",
+            "역할": "role",
+            "기여": "contribution",
+            "협력": "cooperation",
+            "관계": "relationship",
+            "만족": "satisfaction",
+            "불만": "complaint",
+            "해결": "solution",
+            "문제": "problem",
+            "해결책": "solution",
+            "대안": "alternative",
+            "절차": "procedure",
+            "규정": "regulation",
+            "정책": "policy",
+            "기준": "standard",
+            "품질": "quality",
+            "효율": "efficiency",
+            "생산성": "productivity",
+            "효과": "effectiveness",
+            "개선": "improvement",
+            "최적화": "optimization",
+            "자동화": "automation",
+            "디지털화": "digitalization",
+            "혁신": "innovation",
+            "변화": "change",
+            "성장": "growth",
+            "발전": "development",
+            "지속가능성": "sustainability",
+            "사회적 책임": "social responsibility",
+            "윤리": "ethics",
+            "투명성": "transparency",
+            "신뢰": "trust",
+            "존중": "respect",
+            "공정성": "fairness",
+            "다양성": "diversity",
+            "포용성": "inclusion",
+            "협업": "collaboration",
+            "파트너십": "partnership",
+            "네트워크": "network",
+            "커뮤니케이션": "communication",
+            "의사소통": "communication",
+            "소통": "communication",
+            "공유": "sharing",
+            "피드백": "feedback",
+            "논의": "discussion",
+            "토론": "debate",
+            "합의": "agreement",
+            "결정": "decision",
+            "실행": "execution",
+            "구현": "implementation",
+            "적용": "application",
+            "평가": "evaluation",
+            "측정": "measurement",
+            "분석": "analysis",
+            "개선": "improvement",
+            "혁신": "innovation"
+        };
 
         function showError(message) {
             errorMessage.textContent = message;
@@ -266,7 +384,7 @@
 
         async function translateText() {
             const sourceText = sourceTextarea.value.trim();
-            API_KEY = apiKeyInput.value.trim();
+            //API_KEY = apiKeyInput.value.trim();
             const sourceLanguage = sourceLanguageSelect.value;
             const targetLanguage = targetLanguageSelect.value;
 
@@ -280,7 +398,7 @@
                 return;
             }
 
-            if (sourceLanguage === targetLanguage) {
+             if (sourceLanguage === targetLanguage) {
                 showError('출발어와 도착어는 같을 수 없습니다.');
                 return;
             }
@@ -293,6 +411,16 @@
                 const fullApiUrl = `${API_URL}${modelSelect.value}:generateContent?key=${API_KEY}`;
                 console.log("API URL:", fullApiUrl);
 
+                // Prompt를 수정하여, 비즈니스 용어 번역을 강화하고, 문맥을 고려하도록 지시.
+                let prompt = `Translate the following text from ${sourceLanguage} to ${targetLanguage} in a professional business style.  Use the following business terms where appropriate: `;
+
+                // Add business terms to the prompt
+                for (const [korean, english] of Object.entries(BUSINESS_TERMS)) {
+                    prompt += `${korean} as ${english}, `;
+                }
+                prompt = prompt.slice(0, -2); // Remove the last ", "
+                prompt += `.  Consider the context and nuances of the text. Just return the translated text, do not add any explanations.  Here is the text to translate: ${sourceText}`;
+
                 const response = await fetch(fullApiUrl, {
                     method: 'POST',
                     headers: {
@@ -301,9 +429,9 @@
                     body: JSON.stringify({
                         contents: [{
                             parts: [{
-                                text: `Translate the following text from ${sourceLanguage} to ${targetLanguage} in a professional business style. Just return the translated text: ${sourceText}`
+                                text: prompt
                             }]
-                        }]
+                        })
                     }),
                 });
 
