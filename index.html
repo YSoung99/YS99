@@ -408,6 +408,7 @@
         <!-- 탭 메뉴 추가 -->
         <div class="tabs">
             <div class="tab active" data-tab="translation-tab">번역</div>
+            <div class="tab" data-tab="dictionary-tab">번역사전</div>
             <div class="tab" data-tab="settings-tab">설정</div>
             <div class="tab" data-tab="help-tab">도움말</div>
         </div>
@@ -450,6 +451,54 @@
                 <!-- 번역하기 버튼 추가 -->
                 <button id="translate-button" class="translate-button" style="display: none;">번역하기</button>
                 <button id="clear-button" class="clear-button">초기화</button>
+            </div>
+        </div>
+
+        <!-- 번역사전 탭 콘텐츠 추가 -->
+        <div id="dictionary-tab" class="tab-content">
+            <div class="mb-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">번역사전</h2>
+                <p class="text-gray-600 mb-4">자주 사용하는 단어나 문구의 번역을 저장하고 관리할 수 있습니다.</p>
+                
+                <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+                    <div class="flex flex-col md:flex-row mb-4">
+                        <div class="md:w-1/3 mb-2 md:mb-0 md:pr-2">
+                            <input type="text" id="dict-source-text" placeholder="원문" class="w-full border border-gray-300 rounded-md p-2">
+                        </div>
+                        <div class="md:w-1/3 mb-2 md:mb-0 md:px-2">
+                            <input type="text" id="dict-target-text" placeholder="번역문" class="w-full border border-gray-300 rounded-md p-2">
+                        </div>
+                        <div class="md:w-1/3 md:pl-2 flex">
+                            <button id="add-dict-entry" class="bg-blue-500 hover:bg-blue-600 text-white rounded-md p-2 flex-grow">추가</button>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="bg-gray-100 border-b">
+                                    <th class="text-left p-2">원문</th>
+                                    <th class="text-left p-2">번역문</th>
+                                    <th class="text-right p-2">관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dictionary-entries">
+                                <!-- 사전 항목들이 여기에 동적으로 추가됨 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-4 text-right">
+                        <button id="clear-dictionary" class="bg-red-500 hover:bg-red-600 text-white rounded-md p-2 text-sm">모든 항목 삭제</button>
+                    </div>
+                </div>
+                
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <h3 class="font-medium text-lg mb-2">사용 방법</h3>
+                    <p>1. 원문과 번역문을 입력하고 추가 버튼을 누르세요.</p>
+                    <p>2. 번역 시 사전에 있는 단어나 문구는 자동으로 대체됩니다.</p>
+                    <p>3. 항목 관리 버튼으로 개별 항목을 삭제할 수 있습니다.</p>
+                </div>
             </div>
         </div>
 
@@ -517,6 +566,13 @@
         const copyButton = document.getElementById('copy-button');
         const copyFeedback = document.getElementById('copy-feedback');
         
+        // 번역사전 관련 요소
+        const dictSourceText = document.getElementById('dict-source-text');
+        const dictTargetText = document.getElementById('dict-target-text');
+        const addDictEntryButton = document.getElementById('add-dict-entry');
+        const dictionaryEntries = document.getElementById('dictionary-entries');
+        const clearDictionaryButton = document.getElementById('clear-dictionary');
+        
         // 모드 전환 버튼 및 번역하기 버튼 요소
         const autoTranslateMode = document.getElementById('auto-translate-mode');
         const manualTranslateMode = document.getElementById('manual-translate-mode');
@@ -528,7 +584,112 @@
         // 탭 관련 요소
         const tabs = document.querySelectorAll('.tab');
         const tabContents = document.querySelectorAll('.tab-content');
-
+        
+        // 번역사전 데이터
+        let dictionary = [];
+        
+        // 번역사전 로드
+        function loadDictionary() {
+            const savedDictionary = localStorage.getItem('translation_dictionary');
+            if (savedDictionary) {
+                try {
+                    dictionary = JSON.parse(savedDictionary);
+                    renderDictionary();
+                } catch (e) {
+                    console.error('사전 로드 중 오류 발생:', e);
+                    dictionary = [];
+                }
+            }
+        }
+        
+        // 번역사전 저장
+        function saveDictionary() {
+            localStorage.setItem('translation_dictionary', JSON.stringify(dictionary));
+        }
+        
+        // 번역사전 렌더링
+        function renderDictionary() {
+            dictionaryEntries.innerHTML = '';
+            dictionary.forEach((entry, index) => {
+                const row = document.createElement('tr');
+                row.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                row.innerHTML = `
+                    <td class="p-2 border-b">${entry.source}</td>
+                    <td class="p-2 border-b">${entry.target}</td>
+                    <td class="p-2 border-b text-right">
+                        <button class="delete-entry text-red-500 hover:text-red-700" data-index="${index}">삭제</button>
+                    </td>
+                `;
+                dictionaryEntries.appendChild(row);
+            });
+            
+            // 삭제 버튼에 이벤트 리스너 추가
+            document.querySelectorAll('.delete-entry').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const index = parseInt(e.target.getAttribute('data-index'));
+                    dictionary.splice(index, 1);
+                    saveDictionary();
+                    renderDictionary();
+                });
+            });
+        }
+        
+        // 번역사전 추가 기능
+        addDictEntryButton.addEventListener('click', () => {
+            const source = dictSourceText.value.trim();
+            const target = dictTargetText.value.trim();
+            
+            if (source && target) {
+                // 중복 확인
+                const isDuplicate = dictionary.some(entry => entry.source === source);
+                
+                if (isDuplicate) {
+                    // 중복일 경우 업데이트
+                    dictionary = dictionary.map(entry => 
+                        entry.source === source ? { ...entry, target } : entry
+                    );
+                } else {
+                    // 새 항목 추가
+                    dictionary.push({ source, target });
+                }
+                
+                saveDictionary();
+                renderDictionary();
+                
+                // 입력 필드 초기화
+                dictSourceText.value = '';
+                dictTargetText.value = '';
+            } else {
+                alert('원문과 번역문을 모두 입력해주세요.');
+            }
+        });
+        
+        // 번역사전 전체 삭제
+        clearDictionaryButton.addEventListener('click', () => {
+            if (confirm('모든 사전 항목을 삭제하시겠습니까?')) {
+                dictionary = [];
+                saveDictionary();
+                renderDictionary();
+            }
+        });
+        
+        // 번역 시 사전 적용 함수
+        function applyDictionary(text) {
+            let result = text;
+            // 긴 구문부터 적용 (짧은 단어가 긴 구문의 일부일 경우 문제 방지)
+            dictionary.sort((a, b) => b.source.length - a.source.length)
+                     .forEach(entry => {
+                         const regex = new RegExp(escapeRegExp(entry.source), 'gi');
+                         result = result.replace(regex, entry.target);
+                     });
+            return result;
+        }
+        
+        // 정규식 특수문자 이스케이프
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+        
         // 모드 전환 버튼 이벤트 핸들러
         autoTranslateMode.addEventListener('click', () => {
             if (!isAutoTranslateMode) {
@@ -652,42 +813,51 @@
             translationResultArea.value = '번역 중...';
 
             try {
-                // 선택된 모델에 따라 API URL을 설정합니다.
-                const fullApiUrl = `${API_URL}${modelSelect.value}:generateContent?key=${API_KEY}`;
-                console.log("API URL:", fullApiUrl);
+                // 사전 적용 (원문에 사전 항목이 포함된 경우)
+                const dictionaryApplied = applyDictionary(sourceText);
+                
+                // 사전 적용 후에도 원문과 동일하면 API 번역 실행
+                if (dictionaryApplied === sourceText) {
+                    // 선택된 모델에 따라 API URL을 설정합니다.
+                    const fullApiUrl = `${API_URL}${modelSelect.value}:generateContent?key=${API_KEY}`;
+                    console.log("API URL:", fullApiUrl);
 
-                const response = await fetch(fullApiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{
-                                text: `Translate the following text from ${sourceLanguage} to ${targetLanguage} in a professional business style. Just return the translated text: ${sourceText}`
-                            }]
-                        }],
-                        generationConfig: {
-                            temperature: temperature,
-                            topP: topP
-                        }
-                    }),
-                });
+                    const response = await fetch(fullApiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `Translate the following text from ${sourceLanguage} to ${targetLanguage} in a professional business style. Just return the translated text: ${sourceText}`
+                                }]
+                            }],
+                            generationConfig: {
+                                temperature: temperature,
+                                topP: topP
+                            }
+                        }),
+                    });
 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error(`HTTP error! status: ${response.status}, response text: ${errorText}`);
-                    throw new Error(`HTTP error! status: ${response.status}, ${errorText}`);
-                }
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error(`HTTP error! status: ${response.status}, response text: ${errorText}`);
+                        throw new Error(`HTTP error! status: ${response.status}, ${errorText}`);
+                    }
 
-                const data = await response.json();
-                console.log(data);
+                    const data = await response.json();
+                    console.log(data);
 
-                if (data.candidates && data.candidates[0]?.content?.parts && data.candidates[0].content.parts[0]?.text) {
-                    const translatedText = data.candidates[0].content.parts[0].text;
-                    translationResultArea.value = translatedText;
+                    if (data.candidates && data.candidates[0]?.content?.parts && data.candidates[0].content.parts[0]?.text) {
+                        const translatedText = data.candidates[0].content.parts[0].text;
+                        translationResultArea.value = translatedText;
+                    } else {
+                        throw new Error('번역 결과를 받지 못했습니다.');
+                    }
                 } else {
-                    throw new Error('번역 결과를 받지 못했습니다.');
+                    // 사전에서 변환된 텍스트가 있으면 즉시 표시
+                    translationResultArea.value = dictionaryApplied;
                 }
 
             } catch (error) {
@@ -740,6 +910,11 @@
         });
 
         clearButton.addEventListener('click', clearInputAndResult);
+
+        // 페이지 로드 시 번역사전 로드
+        window.addEventListener('DOMContentLoaded', () => {
+            loadDictionary();
+        });
     </script>
 </body>
 </html>
