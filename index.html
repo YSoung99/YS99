@@ -416,11 +416,17 @@
         <!-- 번역 탭 콘텐츠 -->
         <div id="translation-tab" class="tab-content active">
             <div class="language-select-group">
-                <select id="source-language-select">
-                    <option value="en">영어</option>
-                    <option value="ko">한국어</option>
-                    <option value="ja">일본어</option>
-                </select>
+                <div class="relative flex items-center">
+                    <select id="source-language-select">
+                        <option value="auto">자동 감지</option>
+                        <option value="en">영어</option>
+                        <option value="ko">한국어</option>
+                        <option value="ja">일본어</option>
+                    </select>
+                    <div id="detected-language" class="text-xs text-gray-500 absolute -bottom-5 left-0 w-full text-center hidden">
+                        감지된 언어: <span id="detected-language-text">-</span>
+                    </div>
+                </div>
                 <button id="swap-languages-button">⇆</button>
                 <select id="target-language-select">
                     <option value="ko">한국어</option>
@@ -565,6 +571,8 @@
         const swapLanguagesButton = document.getElementById('swap-languages-button');
         const copyButton = document.getElementById('copy-button');
         const copyFeedback = document.getElementById('copy-feedback');
+        const detectedLanguageElement = document.getElementById('detected-language');
+        const detectedLanguageText = document.getElementById('detected-language-text');
         
         // 번역사전 관련 요소
         const dictSourceText = document.getElementById('dict-source-text');
@@ -764,19 +772,16 @@
         }
 
         function clearInputAndResult() {
+            // 번역 텍스트와 결과만 초기화
             sourceTextarea.value = '';
             translationResultArea.value = '';
             errorMessage.textContent = '';
-            errorMessage.textContent = '';
-            temperatureSlider.value = 70;
-            temperature = 0.7;
-            temperatureValueDisplay.textContent = '0.7';
-            topPSlider.value = 95;
-            topP = 0.95;
-            topPValueDisplay.textContent = '0.95';
-            apiKeyInput.value = '';
-            API_KEY = '';
-            localStorage.removeItem('gemini_api_key');
+            
+            // 감지된 언어 정보 초기화
+            detectedLanguageElement.classList.add('hidden');
+            detectedSourceLanguage = null;
+            
+            // API 키 및 설정은 그대로 유지
         }
 
         let typingTimeout;
@@ -790,25 +795,39 @@
 
         async function translateText() {
             const sourceText = sourceTextarea.value.trim();
-            const sourceLanguage = sourceLanguageSelect.value;
-            const targetLanguage = targetLanguageSelect.value;
+            
+            // API 키 확인
             API_KEY = apiKeyInput.value.trim();
-
-             if (!API_KEY) {
+            if (!API_KEY) {
                 showError('API 키를 입력해주세요.');
                 return;
             }
 
+            // 소스 텍스트 확인
             if (!sourceText) {
                 translationResultArea.value = '';
                 return;
             }
-
+            
+            // 소스 언어 결정
+            let sourceLanguage = sourceLanguageSelect.value;
+            if (sourceLanguage === 'auto') {
+                // 감지된 언어가 없고 텍스트가 충분하면 감지 시도
+                if (!detectedSourceLanguage && sourceText.length >= 5) {
+                    detectedSourceLanguage = await detectLanguage(sourceText);
+                }
+                sourceLanguage = detectedSourceLanguage || 'en'; // 감지된 언어가 없으면 기본값 영어
+            }
+            
+            const targetLanguage = targetLanguageSelect.value;
+            
+            // 같은 언어로 번역 시도 차단
             if (sourceLanguage === targetLanguage) {
                 showError('출발어와 도착어는 같을 수 없습니다.');
                 return;
             }
 
+            // 번역 과정 시작
             errorMessage.textContent = '';
             translationResultArea.value = '번역 중...';
 
@@ -820,8 +839,7 @@
                 if (dictionaryApplied === sourceText) {
                     // 선택된 모델에 따라 API URL을 설정합니다.
                     const fullApiUrl = `${API_URL}${modelSelect.value}:generateContent?key=${API_KEY}`;
-                    console.log("API URL:", fullApiUrl);
-
+                    
                     const response = await fetch(fullApiUrl, {
                         method: 'POST',
                         headers: {
@@ -847,8 +865,7 @@
                     }
 
                     const data = await response.json();
-                    console.log(data);
-
+                    
                     if (data.candidates && data.candidates[0]?.content?.parts && data.candidates[0].content.parts[0]?.text) {
                         const translatedText = data.candidates[0].content.parts[0].text;
                         translationResultArea.value = translatedText;
@@ -866,27 +883,195 @@
             }
         }
 
-        // API 키 저장 버튼 클릭 이벤트 처리
-        saveApiKeyButton.addEventListener('click', () => {
+        // 감지된 언어를 저장할 변수
+        let detectedSourceLanguage = null;
+        let detectLanguageTimeout;
+        
+        // 언어 감지 함수
+        async function detectLanguage(text) {
+            if (!text.trim() || text.length < 5) {
+                detectedLanguageElement.classList.add('hidden');
+                return null; // 텍스트가 너무 짧으면 감지하지 않음
+            }
+            
             const apiKey = apiKeyInput.value.trim();
-            if (apiKey) {
-                localStorage.setItem('gemini_api_key', apiKey);
-                alert('API 키가 저장되었습니다.');
-            } else {
-                alert('API 키를 입력해주세요.');
+            if (!apiKey) {
+                return null;
+            }
+            
+            try {
+                // 감지 중임을 표시
+                detectedLanguageText.textContent = "감지 중...";
+                detectedLanguageElement.classList.remove('hidden');
+                
+                const fullApiUrl = `${API_URL}${modelSelect.value}:generateContent?key=${apiKey}`;
+                
+                const response = await fetch(fullApiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: `Identify the language of this text. Only respond with the language code (en, ko, ja, etc.). Text: "${text.substring(0, 100)}..."`
+                            }]
+                        }],
+                        generationConfig: {
+                            temperature: 0,
+                            topP: 1
+                        }
+                    }),
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                if (data.candidates && data.candidates[0]?.content?.parts && data.candidates[0].content.parts[0]?.text) {
+                    const detectedLang = data.candidates[0].content.parts[0].text.trim().toLowerCase();
+                    
+                    // 언어 코드만 추출 (API가 다양한 형태로 응답할 수 있음)
+                    let langCode;
+                    if (detectedLang.includes('ko') || detectedLang.includes('korean')) {
+                        langCode = 'ko';
+                    } else if (detectedLang.includes('en') || detectedLang.includes('english')) {
+                        langCode = 'en';
+                    } else if (detectedLang.includes('ja') || detectedLang.includes('japanese')) {
+                        langCode = 'ja';
+                    } else {
+                        // 기타 언어 코드 감지 시도
+                        const langMatch = detectedLang.match(/(^|\s)(en|ko|ja)($|\s|:)/);
+                        langCode = langMatch ? langMatch[2] : null;
+                    }
+                    
+                    // 언어가 감지되었을 때 UI 업데이트
+                    if (langCode) {
+                        // 감지된 언어 코드에 해당하는 옵션 텍스트 가져오기
+                        const langOption = [...sourceLanguageSelect.options].find(option => option.value === langCode);
+                        const langName = langOption ? langOption.textContent : langCode;
+                        
+                        // 감지된 언어 표시
+                        detectedLanguageText.textContent = langName;
+                        detectedLanguageElement.classList.remove('hidden');
+                        
+                        // sourceLanguageSelect가 'auto'로 설정되어 있을 때만 자동으로 언어 설정
+                        if (sourceLanguageSelect.value === 'auto') {
+                            // 내부 상태 변수에 감지된 언어 저장
+                            detectedSourceLanguage = langCode;
+                            
+                            // 자동 번역이 켜져 있다면 번역 실행
+                            if (isAutoTranslateMode && sourceTextarea.value.trim()) {
+                                translateText();
+                            }
+                        }
+                        
+                        return langCode;
+                    }
+                }
+                
+                detectedLanguageElement.classList.add('hidden');
+                return null;
+                
+            } catch (error) {
+                console.error('언어 감지 오류:', error);
+                detectedLanguageElement.classList.add('hidden');
+                return null;
+            }
+        }
+        
+        // 입력 시 언어 감지 실행
+        sourceTextarea.addEventListener('input', () => {
+            clearTimeout(typingTimeout);
+            clearTimeout(detectLanguageTimeout);
+            
+            // 자동 감지 모드일 때 (소스 언어가 'auto'로 설정됨)
+            if (sourceLanguageSelect.value === 'auto') {
+                // 일정 시간 후 언어 감지 실행 (API 호출 최소화)
+                detectLanguageTimeout = setTimeout(async () => {
+                    // 5자 이상일 때만 언어 감지
+                    if (sourceTextarea.value.length >= 5) {
+                        await detectLanguage(sourceTextarea.value);
+                    } else {
+                        detectedLanguageElement.classList.add('hidden');
+                        detectedSourceLanguage = null;
+                    }
+                }, 800); // 입력 후 0.8초 후 감지
+            }
+            
+            // 자동 번역 모드인 경우에만 타이핑 후 번역 실행
+            if (isAutoTranslateMode) {
+                typingTimeout = setTimeout(translateText, 500);
             }
         });
-
-        // Swap button functionality
+        
+        // 스왑 버튼 기능 개선
         swapLanguagesButton.addEventListener('click', () => {
             const sourceLanguageValue = sourceLanguageSelect.value;
             const targetLanguageValue = targetLanguageSelect.value;
+            const sourceTextValue = sourceTextarea.value.trim();
+            const targetTextValue = translationResultArea.value.trim();
 
-            // Swap the values
-            sourceLanguageSelect.value = targetLanguageValue;
-            targetLanguageSelect.value = sourceLanguageValue;
+            // 자동 감지 모드에서는 스왑 시 특별 처리
+            let newSourceLang = targetLanguageValue;
+            let newTargetLang;
+            
+            if (sourceLanguageValue === 'auto') {
+                // 감지된 언어가 있으면 해당 언어로, 없으면 기본 언어로 설정
+                newTargetLang = detectedSourceLanguage || 'en';
+            } else {
+                newTargetLang = sourceLanguageValue;
+            }
+            
+            // 언어 선택 업데이트
+            sourceLanguageSelect.value = newSourceLang;
+            targetLanguageSelect.value = newTargetLang;
+            
+            // 감지된 언어 표시 숨김 및 초기화
+            detectedLanguageElement.classList.add('hidden');
+            detectedSourceLanguage = null;
+            
+            // 텍스트 스왑 처리
+            if (sourceTextValue && targetTextValue) {
+                // 양쪽 모두 텍스트가 있는 경우
+                sourceTextarea.value = targetTextValue;
+                translationResultArea.value = sourceTextValue;
+            } else if (sourceTextValue) {
+                // 소스에만 텍스트가 있는 경우
+                translationResultArea.value = sourceTextValue;
+                sourceTextarea.value = '';
+                return; // 자동 번역 실행 않음
+            } else if (targetTextValue) {
+                // 결과에만 텍스트가 있는 경우
+                sourceTextarea.value = targetTextValue;
+                translationResultArea.value = '';
+                
+                // 자동 번역 모드면 번역 실행
+                if (isAutoTranslateMode && sourceTextarea.value.trim()) {
+                    // 새 언어로 감지가 필요한 경우
+                    if (sourceLanguageSelect.value === 'auto') {
+                        detectLanguage(sourceTextarea.value).then(() => {
+                            translateText();
+                        });
+                    } else {
+                        translateText();
+                    }
+                }
+                return;
+            }
 
-            translateText();
+            // 양쪽 모두 텍스트가 있고 자동 번역 모드인 경우
+            if (isAutoTranslateMode && sourceTextarea.value.trim()) {
+                // 새 언어로 감지가 필요한 경우
+                if (sourceLanguageSelect.value === 'auto') {
+                    detectLanguage(sourceTextarea.value).then(() => {
+                        translateText();
+                    });
+                } else {
+                    translateText();
+                }
+            }
         });
 
         // 복사 버튼 기능
@@ -911,9 +1096,30 @@
 
         clearButton.addEventListener('click', clearInputAndResult);
 
-        // 페이지 로드 시 번역사전 로드
+        // DOM 완전히 로드된 후 실행되도록 이벤트 리스너 추가
         window.addEventListener('DOMContentLoaded', () => {
             loadDictionary();
+            
+            // 언어 자동 감지 UI 초기설정
+            if (sourceLanguageSelect.value === 'auto' && sourceTextarea.value.trim()) {
+                detectLanguage(sourceTextarea.value);
+            }
+            
+            // 탭 전환 기능
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const tabId = tab.getAttribute('data-tab');
+                    console.log("탭 클릭:", tabId); // 디버깅용
+                    
+                    // 현재 활성화된 탭과 콘텐츠의 활성 클래스 제거
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tabContents.forEach(c => c.classList.remove('active'));
+                    
+                    // 선택된 탭과 해당 콘텐츠 활성화
+                    tab.classList.add('active');
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
         });
     </script>
 </body>
