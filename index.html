@@ -379,6 +379,19 @@
             color: #6b7280;
         }
         
+        /* 번역 스타일 토글 버튼 스타일 */
+        .style-toggle {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1rem;
+            background-color: #f3f4f6;
+            border-radius: 9999px;
+            padding: 0.25rem;
+            max-width: 300px; /* 400px에서 300px로 조정 (2개 버튼에 맞게) */
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
         /* 번역하기 버튼 스타일 */
         #translate-button {
             padding: 0.75rem 1.5rem;
@@ -439,6 +452,12 @@
             <div class="mode-toggle">
                 <button id="auto-translate-mode" class="active">자동번역</button>
                 <button id="manual-translate-mode">직접번역</button>
+            </div>
+            
+            <!-- 번역 스타일 토글 추가 -->
+            <div class="style-toggle">
+                <button id="general-style" class="active">일반</button>
+                <button id="business-style">비즈니스</button>
             </div>
 
             <div class="input-output-group">
@@ -573,6 +592,13 @@
         const copyFeedback = document.getElementById('copy-feedback');
         const detectedLanguageElement = document.getElementById('detected-language');
         const detectedLanguageText = document.getElementById('detected-language-text');
+        
+        // 번역 스타일 토글 버튼
+        const generalStyleButton = document.getElementById('general-style');
+        const businessStyleButton = document.getElementById('business-style');
+        
+        // 현재 선택된 번역 스타일 (기본값: 일반)
+        let currentTranslationStyle = 'general';
         
         // 번역사전 관련 요소
         const dictSourceText = document.getElementById('dict-source-text');
@@ -793,6 +819,45 @@
             }
         });
 
+        // 번역 스타일 토글 버튼 이벤트 핸들러
+        generalStyleButton.addEventListener('click', () => {
+            if (currentTranslationStyle !== 'general') {
+                currentTranslationStyle = 'general';
+                updateStyleToggleUI();
+                
+                // 자동 번역 모드이고 텍스트가 있다면 번역 다시 실행
+                if (isAutoTranslateMode && sourceTextarea.value.trim()) {
+                    translateText();
+                }
+            }
+        });
+        
+        businessStyleButton.addEventListener('click', () => {
+            if (currentTranslationStyle !== 'business') {
+                currentTranslationStyle = 'business';
+                updateStyleToggleUI();
+                
+                // 자동 번역 모드이고 텍스트가 있다면 번역 다시 실행
+                if (isAutoTranslateMode && sourceTextarea.value.trim()) {
+                    translateText();
+                }
+            }
+        });
+        
+        // 스타일 토글 UI 업데이트 함수
+        function updateStyleToggleUI() {
+            // 모든 버튼에서 active 클래스 제거
+            generalStyleButton.classList.remove('active');
+            businessStyleButton.classList.remove('active');
+            
+            // 현재 선택된 스타일 버튼에 active 클래스 추가
+            if (currentTranslationStyle === 'general') {
+                generalStyleButton.classList.add('active');
+            } else if (currentTranslationStyle === 'business') {
+                businessStyleButton.classList.add('active');
+            }
+        }
+
         async function translateText() {
             const sourceText = sourceTextarea.value.trim();
             
@@ -840,6 +905,16 @@
                     // 선택된 모델에 따라 API URL을 설정합니다.
                     const fullApiUrl = `${API_URL}${modelSelect.value}:generateContent?key=${API_KEY}`;
                     
+                    // 선택된 번역 스타일에 따라 프롬프트 생성
+                    let translationPrompt;
+                    
+                    if (currentTranslationStyle === 'business') {
+                        translationPrompt = `Translate the following text from ${sourceLanguage} to ${targetLanguage} in a professional business style with formal language. Just return the translated text: ${sourceText}`;
+                    } else {
+                        // 기본 일반 스타일
+                        translationPrompt = `Translate the following text from ${sourceLanguage} to ${targetLanguage} in a neutral, standard style. Just return the translated text: ${sourceText}`;
+                    }
+                    
                     const response = await fetch(fullApiUrl, {
                         method: 'POST',
                         headers: {
@@ -848,7 +923,7 @@
                         body: JSON.stringify({
                             contents: [{
                                 parts: [{
-                                    text: `Translate the following text from ${sourceLanguage} to ${targetLanguage} in a professional business style. Just return the translated text: ${sourceText}`
+                                    text: translationPrompt
                                 }]
                             }],
                             generationConfig: {
