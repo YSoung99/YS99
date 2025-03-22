@@ -1484,6 +1484,492 @@
                 });
             });
         });
+        
+        // 설정값들 - 기본값 설정 (중복 선언 정리)
+        let temperature = 0.7;
+        let topP = 0.95;
+        let API_KEY = '';
+        let API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
+        let isAutoTranslateMode = true;
+        let currentTranslationStyle = 'general';
+        let isPronunciationGuideEnabled = false;
+        let detectedSourceLanguage = null;
+        
+        // 타이머 및 디바운스 변수
+        let typingTimeout;
+        let detectLanguageTimeout;
+        let lastTranslationRequest = null;
+        
+        // 설정 저장 함수 - 모든 사용자 설정을 저장하도록 확장
+        function saveSettings() {
+            // API 키 저장
+            localStorage.setItem('gemini_api_key', apiKeyInput.value.trim());
+            
+            // 모델 선택 저장
+            localStorage.setItem('translation_model', modelSelect.value);
+            
+            // 매개변수 설정 저장
+            localStorage.setItem('translation_temperature', temperature);
+            localStorage.setItem('translation_top_p', topP);
+            
+            // 언어 선택 저장
+            localStorage.setItem('source_language', sourceLanguageSelect.value);
+            localStorage.setItem('target_language', targetLanguageSelect.value);
+            
+            // 번역 모드 저장
+            localStorage.setItem('auto_translate_mode', isAutoTranslateMode);
+            
+            // 번역 스타일 저장
+            localStorage.setItem('translation_style', currentTranslationStyle);
+            
+            // 발음 가이드 상태 저장
+            localStorage.setItem('pronunciation_guide_enabled', isPronunciationGuideEnabled);
+        }
+        
+        // 설정 로드 함수 - 모든 사용자 설정을 로드하도록 확장
+        function loadSettings() {
+            // API 키 로드
+            const savedApiKey = localStorage.getItem('gemini_api_key');
+            if (savedApiKey) {
+                apiKeyInput.value = savedApiKey;
+                API_KEY = savedApiKey;
+            }
+            
+            // 모델 선택 로드
+            const savedModel = localStorage.getItem('translation_model');
+            if (savedModel) {
+                modelSelect.value = savedModel;
+            }
+            
+            // 매개변수 설정 로드
+            const savedTemperature = localStorage.getItem('translation_temperature');
+            if (savedTemperature !== null) {
+                temperature = parseFloat(savedTemperature);
+                temperatureSlider.value = Math.round(temperature * 100);
+                temperatureValueDisplay.textContent = temperature.toFixed(2);
+            }
+            
+            const savedTopP = localStorage.getItem('translation_top_p');
+            if (savedTopP !== null) {
+                topP = parseFloat(savedTopP);
+                topPSlider.value = Math.round(topP * 100);
+                topPValueDisplay.textContent = topP.toFixed(2);
+            }
+            
+            // 언어 선택 로드
+            const savedSourceLanguage = localStorage.getItem('source_language');
+            if (savedSourceLanguage) {
+                sourceLanguageSelect.value = savedSourceLanguage;
+            }
+            
+            const savedTargetLanguage = localStorage.getItem('target_language');
+            if (savedTargetLanguage) {
+                targetLanguageSelect.value = savedTargetLanguage;
+            }
+            
+            // 번역 모드 로드
+            const savedAutoTranslateMode = localStorage.getItem('auto_translate_mode');
+            if (savedAutoTranslateMode !== null) {
+                isAutoTranslateMode = savedAutoTranslateMode === 'true';
+                updateTranslationModeUI();
+            }
+            
+            // 번역 스타일 로드
+            const savedTranslationStyle = localStorage.getItem('translation_style');
+            if (savedTranslationStyle) {
+                currentTranslationStyle = savedTranslationStyle;
+                updateStyleToggleUI();
+            }
+            
+            // 발음 가이드 상태 로드
+            const savedPronunciationGuideEnabled = localStorage.getItem('pronunciation_guide_enabled');
+            if (savedPronunciationGuideEnabled !== null) {
+                isPronunciationGuideEnabled = savedPronunciationGuideEnabled === 'true';
+                pronunciationToggle.checked = isPronunciationGuideEnabled;
+                
+                if (isPronunciationGuideEnabled) {
+                    pronunciationGuideContainer.style.display = 'block';
+                }
+            }
+        }
+        
+        // 번역 모드 UI 업데이트 함수
+        function updateTranslationModeUI() {
+            if (isAutoTranslateMode) {
+                autoTranslateMode.classList.add('active');
+                manualTranslateMode.classList.remove('active');
+                translateButton.style.display = 'none';
+            } else {
+                manualTranslateMode.classList.add('active');
+                autoTranslateMode.classList.remove('active');
+                translateButton.style.display = 'block';
+            }
+        }
+        
+        // 디바운스 함수 - API 호출 최적화
+        function debounce(func, wait) {
+            return function() {
+                clearTimeout(typingTimeout);
+                const context = this;
+                const args = arguments;
+                typingTimeout = setTimeout(() => func.apply(context, args), wait);
+            };
+        }
+        
+        // 언어 선택 이벤트 핸들러
+        sourceLanguageSelect.addEventListener('change', () => {
+            saveSettings();
+            
+            if (isAutoTranslateMode && sourceTextarea.value.trim()) {
+                // 자동 감지 모드이고 텍스트가 있는 경우
+                if (sourceLanguageSelect.value === 'auto') {
+                    detectedSourceLanguage = null;
+                    detectLanguage(sourceTextarea.value).then(() => {
+                        translateText();
+                    });
+                } else {
+                    translateText();
+                }
+            } else if (isPronunciationGuideEnabled && translationResultArea.value.trim()) {
+                // 직접 번역 모드에서는 발음 가이드만 업데이트
+                generatePronunciationGuide(
+                    translationResultArea.value.trim(), 
+                    targetLanguageSelect.value,
+                    sourceLanguageSelect.value
+                );
+            }
+        });
+        
+        targetLanguageSelect.addEventListener('change', () => {
+            saveSettings();
+            
+            if (isAutoTranslateMode && sourceTextarea.value.trim()) {
+                translateText();
+            } else if (isPronunciationGuideEnabled && translationResultArea.value.trim()) {
+                // 직접 번역 모드에서는 발음 가이드만 업데이트
+                generatePronunciationGuide(
+                    translationResultArea.value.trim(),
+                    targetLanguageSelect.value,
+                    sourceLanguageSelect.value
+                );
+            }
+        });
+        
+        // 발음 가이드 토글 이벤트 핸들러 개선
+        pronunciationToggle.addEventListener('change', () => {
+            isPronunciationGuideEnabled = pronunciationToggle.checked;
+            
+            // 상태 저장
+            saveSettings();
+            
+            if (isPronunciationGuideEnabled) {
+                pronunciationGuideContainer.style.display = 'block';
+                
+                // 번역 결과가 있으면 발음 가이드 생성
+                const translationResult = translationResultArea.value.trim();
+                if (translationResult) {
+                    generatePronunciationGuide(translationResult, targetLanguageSelect.value, sourceLanguageSelect.value);
+                } else {
+                    pronunciationGuide.textContent = '번역 결과가 없습니다.';
+                }
+            } else {
+                pronunciationGuideContainer.style.display = 'none';
+            }
+        });
+        
+        // 번역 스타일 토글 버튼 이벤트 핸들러 개선
+        generalStyleButton.addEventListener('click', () => {
+            if (currentTranslationStyle !== 'general') {
+                currentTranslationStyle = 'general';
+                updateStyleToggleUI();
+                saveSettings();
+                
+                // 자동 번역 모드이고 텍스트가 있다면 번역 다시 실행
+                if (isAutoTranslateMode && sourceTextarea.value.trim()) {
+                    debouncedTranslate();
+                }
+            }
+        });
+        
+        businessStyleButton.addEventListener('click', () => {
+            if (currentTranslationStyle !== 'business') {
+                currentTranslationStyle = 'business';
+                updateStyleToggleUI();
+                saveSettings();
+                
+                // 자동 번역 모드이고 텍스트가 있다면 번역 다시 실행
+                if (isAutoTranslateMode && sourceTextarea.value.trim()) {
+                    debouncedTranslate();
+                }
+            }
+        });
+        
+        // 모드 전환 버튼 이벤트 핸들러 개선
+        autoTranslateMode.addEventListener('click', () => {
+            if (!isAutoTranslateMode) {
+                isAutoTranslateMode = true;
+                updateTranslationModeUI();
+                saveSettings();
+                
+                // 현재 입력된 텍스트가 있다면 자동 번역 시작
+                if (sourceTextarea.value.trim()) {
+                    translateText();
+                }
+            }
+        });
+        
+        manualTranslateMode.addEventListener('click', () => {
+            if (isAutoTranslateMode) {
+                isAutoTranslateMode = false;
+                updateTranslationModeUI();
+                saveSettings();
+            }
+        });
+        
+        // API 요청 최적화를 위한 번역 함수 개선
+        async function translateText() {
+            const sourceText = sourceTextarea.value.trim();
+            
+            // 진행 중인 요청이 있으면 취소
+            if (lastTranslationRequest && lastTranslationRequest.abort) {
+                lastTranslationRequest.abort();
+            }
+            
+            // API 키 확인
+            API_KEY = apiKeyInput.value.trim();
+            if (!API_KEY) {
+                showError('API 키를 입력해주세요.');
+                return;
+            }
+
+            // 소스 텍스트 확인
+            if (!sourceText) {
+                translationResultArea.value = '';
+                if (isPronunciationGuideEnabled) {
+                    pronunciationGuide.textContent = '번역 결과가 없습니다.';
+                }
+                return;
+            }
+            
+            // 소스 언어 결정
+            let sourceLanguage = sourceLanguageSelect.value;
+            if (sourceLanguage === 'auto') {
+                // 감지된 언어가 없고 텍스트가 충분하면 감지 시도
+                if (!detectedSourceLanguage && sourceText.length >= 5) {
+                    detectedSourceLanguage = await detectLanguage(sourceText);
+                }
+                sourceLanguage = detectedSourceLanguage || 'en'; // 감지된 언어가 없으면 기본값 영어
+            }
+            
+            const targetLanguage = targetLanguageSelect.value;
+            
+            // 같은 언어로 번역 시도 차단
+            if (sourceLanguage === targetLanguage) {
+                showError('출발어와 도착어는 같을 수 없습니다.');
+                return;
+            }
+
+            // 번역 과정 시작
+            errorMessage.textContent = '';
+            translationResultArea.value = '번역 중...';
+
+            try {
+                // 사전 적용 (원문에 사전 항목이 포함된 경우)
+                const dictionaryApplied = applyDictionary(sourceText);
+                
+                // 사전 적용 후에도 원문과 동일하면 API 번역 실행
+                if (dictionaryApplied === sourceText) {
+                    // 선택된 모델에 따라 API URL을 설정
+                    const fullApiUrl = `${API_URL}${modelSelect.value}:generateContent?key=${API_KEY}`;
+                    
+                    // 선택된 번역 스타일에 따라 프롬프트 생성
+                    let translationPrompt;
+                    
+                    if (currentTranslationStyle === 'business') {
+                        translationPrompt = `Translate the following text from ${sourceLanguage} to ${targetLanguage} in a professional business style with formal language. Just return the translated text: ${sourceText}`;
+                    } else {
+                        // 기본 일반 스타일
+                        translationPrompt = `Translate the following text from ${sourceLanguage} to ${targetLanguage} in a neutral, standard style. Just return the translated text: ${sourceText}`;
+                    }
+                    
+                    // AbortController 설정
+                    const abortController = new AbortController();
+                    lastTranslationRequest = abortController;
+                    
+                    const response = await fetch(fullApiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: translationPrompt
+                                }]
+                            }],
+                            generationConfig: {
+                                temperature: temperature,
+                                topP: topP
+                            }
+                        }),
+                        signal: abortController.signal
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error(`HTTP error! status: ${response.status}, response text: ${errorText}`);
+                        throw new Error(`HTTP error! status: ${response.status}, ${errorText}`);
+                    }
+
+                    const data = await response.json();
+                    
+                    if (data.candidates && data.candidates[0]?.content?.parts && data.candidates[0].content.parts[0]?.text) {
+                        const translatedText = data.candidates[0].content.parts[0].text;
+                        translationResultArea.value = translatedText;
+                        
+                        // 발음 가이드 기능이 활성화되어 있다면 발음 가이드 생성
+                        if (isPronunciationGuideEnabled) {
+                            // 한국어 번역인 경우 발음 가이드가 필요 없음
+                            if (targetLanguage !== 'ko') {
+                                generatePronunciationGuide(translatedText, targetLanguage, sourceLanguage);
+                            } else {
+                                pronunciationGuide.textContent = '한국어 번역에는 발음 가이드가 필요하지 않습니다.';
+                            }
+                        }
+                    } else {
+                        throw new Error('번역 결과를 받지 못했습니다.');
+                    }
+                } else {
+                    // 사전에서 변환된 텍스트가 있으면 즉시 표시
+                    translationResultArea.value = dictionaryApplied;
+                    
+                    // 발음 가이드 기능이 활성화되어 있다면 발음 가이드 생성
+                    if (isPronunciationGuideEnabled && targetLanguage !== 'ko') {
+                        generatePronunciationGuide(dictionaryApplied, targetLanguage, sourceLanguage);
+                    }
+                }
+
+            } catch (error) {
+                // AbortError는 사용자가 의도적으로 취소한 경우이므로 오류 메시지 표시하지 않음
+                if (error.name === 'AbortError') {
+                    console.log('Translation request was cancelled');
+                    return;
+                }
+                
+                console.error('Error:', error);
+                showError(`번역 중 오류가 발생했습니다: ${error.message}`);
+            }
+        }
+        
+        // 디바운스된 번역 함수
+        const debouncedTranslate = debounce(() => {
+            translateText();
+        }, 500);
+        
+        // 입력 이벤트 핸들러 최적화
+        sourceTextarea.addEventListener('input', () => {
+            // 자동 감지 모드일 때 (소스 언어가 'auto'로 설정됨)
+            if (sourceLanguageSelect.value === 'auto') {
+                clearTimeout(detectLanguageTimeout);
+                
+                // 일정 시간 후 언어 감지 실행 (API 호출 최소화)
+                detectLanguageTimeout = setTimeout(async () => {
+                    // 5자 이상일 때만 언어 감지
+                    if (sourceTextarea.value.length >= 5) {
+                        await detectLanguage(sourceTextarea.value);
+                    } else {
+                        detectedLanguageElement.classList.add('hidden');
+                        detectedSourceLanguage = null;
+                    }
+                }, 800); // 입력 후 0.8초 후 감지
+            }
+            
+            // 자동 번역 모드인 경우에만 타이핑 후 번역 실행
+            if (isAutoTranslateMode) {
+                debouncedTranslate();
+            }
+        });
+        
+        // API 키 저장 버튼 이벤트 리스너 개선
+        saveApiKeyButton.addEventListener('click', function() {
+            saveSettings();
+            
+            // 성공 피드백 제공
+            const originalText = saveApiKeyButton.textContent;
+            saveApiKeyButton.textContent = '저장됨!';
+            saveApiKeyButton.style.color = '#10b981'; // Success green color
+            
+            setTimeout(() => {
+                saveApiKeyButton.textContent = originalText;
+                saveApiKeyButton.style.color = '';
+            }, 2000);
+        });
+        
+        // 슬라이더 이벤트 리스너 개선
+        temperatureSlider.addEventListener('input', (event) => {
+            temperature = parseFloat(event.target.value) / 100;
+            temperatureValueDisplay.textContent = temperature.toFixed(2);
+        });
+        
+        temperatureSlider.addEventListener('change', saveSettings);
+        
+        topPSlider.addEventListener('input', (event) => {
+            topP = parseFloat(event.target.value) / 100;
+            topPValueDisplay.textContent = topP.toFixed(2);
+        });
+        
+        topPSlider.addEventListener('change', saveSettings);
+        
+        // 초기화 버튼 이벤트 핸들러 개선
+        clearButton.addEventListener('click', () => {
+            clearInputAndResult();
+            
+            // 발음 가이드도 초기화
+            if (isPronunciationGuideEnabled) {
+                pronunciationGuide.textContent = '발음 가이드가 여기에 표시됩니다.';
+            }
+        });
+        
+        // 오류 표시 함수 개선
+        function showError(message) {
+            errorMessage.textContent = message;
+            // 번역 중... 상태였으면 빈칸으로 설정
+            if (translationResultArea.value === '번역 중...') {
+                translationResultArea.value = '';
+            }
+            
+            // 일정 시간 후 오류 메시지 자동 제거
+            setTimeout(() => {
+                errorMessage.textContent = '';
+            }, 5000);
+        }
+        
+        // DOM 완전히 로드된 후 실행되도록 이벤트 리스너 개선
+        window.addEventListener('DOMContentLoaded', () => {
+            // 사전 및 설정 로드
+            loadDictionary();
+            loadSettings();
+            
+            // 언어 자동 감지 UI 초기설정
+            if (sourceLanguageSelect.value === 'auto' && sourceTextarea.value.trim()) {
+                detectLanguage(sourceTextarea.value);
+            }
+            
+            // 탭 전환 기능
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const tabId = tab.getAttribute('data-tab');
+                    
+                    // 현재 활성화된 탭과 콘텐츠의 활성 클래스 제거
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tabContents.forEach(c => c.classList.remove('active'));
+                    
+                    // 선택된 탭과 해당 콘텐츠 활성화
+                    tab.classList.add('active');
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
+        });
     </script>
 </body>
 </html>
