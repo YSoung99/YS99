@@ -392,6 +392,41 @@
             margin-right: auto;
         }
         
+        /* 스타일 토글 버튼 개별 스타일 추가 */
+        .style-toggle button {
+            flex: 1;
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin: 0 2px; /* 버튼 사이 간격 추가 */
+            border: none;
+            position: relative; /* 구분선 추가를 위한 position 설정 */
+        }
+        
+        .style-toggle button.active {
+            background-color: #3b82f6;
+            color: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .style-toggle button:not(.active) {
+            background-color: transparent;
+            color: #6b7280;
+        }
+        
+        /* 모바일 환경에서 스타일 토글 버튼 개선 */
+        @media (max-width: 640px) {
+            .style-toggle {
+                max-width: 250px;
+            }
+            
+            .style-toggle button {
+                padding: 0.5rem 0.75rem;
+            }
+        }
+        
         /* 번역하기 버튼 스타일 */
         #translate-button {
             padding: 0.75rem 1.5rem;
@@ -410,6 +445,95 @@
         
         #translate-button:hover {
             background-color: #2563eb;
+        }
+
+        /* 발음 가이드 토글 스위치 스타일 */
+        .pronunciation-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+        
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+            margin-right: 10px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+        }
+        
+        input:checked + .slider {
+            background-color: #3b82f6;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        
+        .slider.round {
+            border-radius: 24px;
+        }
+        
+        .slider.round:before {
+            border-radius: 50%;
+        }
+        
+        .pronunciation-label {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+        
+        /* 발음 가이드 컨테이너 스타일 */
+        .pronunciation-guide-container {
+            margin-top: 1rem;
+            padding: 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.375rem;
+            background-color: #f8fafc;
+            display: none;
+        }
+        
+        .pronunciation-guide-container h4 {
+            font-size: 1rem;
+            font-weight: 500;
+            color: #4b5563;
+            margin-bottom: 0.5rem;
+        }
+        
+        .pronunciation-guide {
+            font-size: 1rem;
+            line-height: 1.5;
+            color: #1f2937;
+            white-space: pre-wrap;
         }
     </style>
 </head>
@@ -459,6 +583,15 @@
                 <button id="general-style" class="active">일반</button>
                 <button id="business-style">비즈니스</button>
             </div>
+            
+            <!-- 발음 가이드 토글 추가 -->
+            <div class="pronunciation-toggle">
+                <label class="switch">
+                    <input type="checkbox" id="pronunciation-toggle">
+                    <span class="slider round"></span>
+                </label>
+                <span class="pronunciation-label">발음 가이드 표시</span>
+            </div>
 
             <div class="input-output-group">
                 <textarea id="source-text" placeholder="번역할 텍스트를 입력하세요." rows="6" class="w-full"></textarea>
@@ -467,6 +600,12 @@
                     <textarea id="translation-result" placeholder="번역 결과가 여기에 표시됩니다." rows="6" class="w-full" readonly></textarea>
                     <button id="copy-button" class="copy-button">복사하기</button>
                     <div id="copy-feedback" class="copy-feedback">복사되었습니다!</div>
+                </div>
+                
+                <!-- 발음 가이드 표시 영역 추가 -->
+                <div id="pronunciation-guide-container" class="pronunciation-guide-container">
+                    <h4>발음 가이드</h4>
+                    <div id="pronunciation-guide" class="pronunciation-guide">발음 가이드가 여기에 표시됩니다.</div>
                 </div>
                 
                 <p id="error-message" class="text-red-500"></p>
@@ -770,6 +909,77 @@
         let API_KEY = localStorage.getItem('gemini_api_key') || '';
         apiKeyInput.value = API_KEY; // Load stored API key on page load
 
+        // 설정 저장 함수
+        function saveSettings() {
+            // API 키 저장
+            localStorage.setItem('gemini_api_key', apiKeyInput.value.trim());
+            
+            // 모델 선택 저장
+            localStorage.setItem('translation_model', modelSelect.value);
+            
+            // 매개변수 설정 저장
+            localStorage.setItem('translation_temperature', temperature);
+            localStorage.setItem('translation_top_p', topP);
+        }
+        
+        // 설정 로드 함수
+        function loadSettings() {
+            // API 키 로드
+            const savedApiKey = localStorage.getItem('gemini_api_key');
+            if (savedApiKey) {
+                apiKeyInput.value = savedApiKey;
+                API_KEY = savedApiKey;
+            }
+            
+            // 모델 선택 로드
+            const savedModel = localStorage.getItem('translation_model');
+            if (savedModel) {
+                modelSelect.value = savedModel;
+            }
+            
+            // 매개변수 설정 로드
+            const savedTemperature = localStorage.getItem('translation_temperature');
+            if (savedTemperature !== null) {
+                temperature = parseFloat(savedTemperature);
+                temperatureSlider.value = Math.round(temperature * 100);
+                temperatureValueDisplay.textContent = temperature.toFixed(2);
+            }
+            
+            const savedTopP = localStorage.getItem('translation_top_p');
+            if (savedTopP !== null) {
+                topP = parseFloat(savedTopP);
+                topPSlider.value = Math.round(topP * 100);
+                topPValueDisplay.textContent = topP.toFixed(2);
+            }
+        }
+        
+        // 설정 탭 관련 요소에 이벤트 리스너 추가
+        apiKeyInput.addEventListener('change', saveSettings);
+        modelSelect.addEventListener('change', saveSettings);
+        
+        // API 키 저장 버튼 이벤트 리스너
+        saveApiKeyButton.addEventListener('click', function() {
+            saveSettings();
+            alert('API 키가 저장되었습니다.');
+        });
+
+        // 슬라이더 이벤트 리스너 수정
+        temperatureSlider.addEventListener('input', (event) => {
+            temperature = parseFloat(event.target.value) / 100;
+            temperatureValueDisplay.textContent = temperature.toFixed(2);
+        });
+        
+        // 슬라이더 변경 완료 시에만 저장 (성능 최적화)
+        temperatureSlider.addEventListener('change', saveSettings);
+
+        topPSlider.addEventListener('input', (event) => {
+            topP = parseFloat(event.target.value) / 100;
+            topPValueDisplay.textContent = topP.toFixed(2);
+        });
+        
+        // 슬라이더 변경 완료 시에만 저장 (성능 최적화)
+        topPSlider.addEventListener('change', saveSettings);
+
         // Gemini API 키를 여기에 입력하세요.
         // const API_KEY = 'YOUR_API_KEY'; // 여기에 API 키를 넣으세요
         let API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
@@ -819,46 +1029,107 @@
             }
         });
 
-        // 번역 스타일 토글 버튼 이벤트 핸들러
-        generalStyleButton.addEventListener('click', () => {
-            if (currentTranslationStyle !== 'general') {
-                currentTranslationStyle = 'general';
-                updateStyleToggleUI();
-                
-                // 자동 번역 모드이고 텍스트가 있다면 번역 다시 실행
-                if (isAutoTranslateMode && sourceTextarea.value.trim()) {
-                    translateText();
-                }
-            }
-        });
+        // 발음 가이드 관련 요소
+        const pronunciationToggle = document.getElementById('pronunciation-toggle');
+        const pronunciationGuideContainer = document.getElementById('pronunciation-guide-container');
+        const pronunciationGuide = document.getElementById('pronunciation-guide');
         
-        businessStyleButton.addEventListener('click', () => {
-            if (currentTranslationStyle !== 'business') {
-                currentTranslationStyle = 'business';
-                updateStyleToggleUI();
-                
-                // 자동 번역 모드이고 텍스트가 있다면 번역 다시 실행
-                if (isAutoTranslateMode && sourceTextarea.value.trim()) {
-                    translateText();
-                }
-            }
-        });
+        // 발음 가이드 활성화 상태
+        let isPronunciationGuideEnabled = false;
         
-        // 스타일 토글 UI 업데이트 함수
-        function updateStyleToggleUI() {
-            // 모든 버튼에서 active 클래스 제거
-            generalStyleButton.classList.remove('active');
-            businessStyleButton.classList.remove('active');
+        // 발음 가이드 토글 이벤트 핸들러
+        pronunciationToggle.addEventListener('change', () => {
+            isPronunciationGuideEnabled = pronunciationToggle.checked;
             
-            // 현재 선택된 스타일 버튼에 active 클래스 추가
-            if (currentTranslationStyle === 'general') {
-                generalStyleButton.classList.add('active');
-            } else if (currentTranslationStyle === 'business') {
-                businessStyleButton.classList.add('active');
+            if (isPronunciationGuideEnabled) {
+                pronunciationGuideContainer.style.display = 'block';
+                
+                // 번역 결과가 있으면 발음 가이드 생성
+                const translationResult = translationResultArea.value.trim();
+                if (translationResult) {
+                    generatePronunciationGuide(translationResult, targetLanguageSelect.value, sourceLanguageSelect.value);
+                } else {
+                    pronunciationGuide.textContent = '번역 결과가 없습니다.';
+                }
+            } else {
+                pronunciationGuideContainer.style.display = 'none';
+            }
+        });
+        
+        // 발음 가이드 생성 함수
+        async function generatePronunciationGuide(text, targetLang, sourceLang) {
+            if (!isPronunciationGuideEnabled) return;
+            
+            // API 키 확인
+            API_KEY = apiKeyInput.value.trim();
+            if (!API_KEY) {
+                pronunciationGuide.textContent = 'API 키가 필요합니다.';
+                return;
+            }
+            
+            try {
+                pronunciationGuide.textContent = '발음 가이드 생성 중...';
+                
+                const fullApiUrl = `${API_URL}${modelSelect.value}:generateContent?key=${API_KEY}`;
+                
+                // 언어별 프롬프트 조정
+                let promptText = '';
+                if (targetLang === 'en') {
+                    // 영어에 대한 한국어 발음 가이드
+                    promptText = `다음 영어 텍스트를 한국 사람들이 발음하기 쉽도록 한글로 발음 표기해주세요. 
+                    원문: "${text}" 
+                    발음 표기만 제공하고 다른 설명은 하지 마세요.`;
+                } else if (targetLang === 'ja') {
+                    // 일본어에 대한 한국어 발음 가이드
+                    promptText = `다음 일본어 텍스트를 한국 사람들이 발음하기 쉽도록 한글로 발음 표기해주세요. 
+                    원문: "${text}" 
+                    발음 표기만 제공하고 다른 설명은 하지 마세요.`;
+                } else {
+                    // 기타 언어 (또는 한국어인 경우)
+                    promptText = `다음 ${targetLang} 텍스트를 한국 사람들이 발음하기 쉽도록 한글로 발음 표기해주세요. 
+                    원문: "${text}" 
+                    발음 표기만 제공하고 다른 설명은 하지 마세요.`;
+                }
+                
+                const response = await fetch(fullApiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: promptText
+                            }]
+                        }],
+                        generationConfig: {
+                            temperature: 0.2,
+                            topP: 1
+                        }
+                    }),
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                if (data.candidates && data.candidates[0]?.content?.parts && data.candidates[0].content.parts[0]?.text) {
+                    const guide = data.candidates[0].content.parts[0].text;
+                    pronunciationGuide.textContent = guide;
+                } else {
+                    throw new Error('발음 가이드를 생성할 수 없습니다.');
+                }
+                
+            } catch (error) {
+                console.error('발음 가이드 생성 오류:', error);
+                pronunciationGuide.textContent = `발음 가이드 생성 중 오류가 발생했습니다: ${error.message}`;
             }
         }
-
+        
+        // 번역 결과가 업데이트될 때마다 발음 가이드 업데이트
         async function translateText() {
+            // 기존 번역 코드는 그대로 유지
             const sourceText = sourceTextarea.value.trim();
             
             // API 키 확인
@@ -944,12 +1215,27 @@
                     if (data.candidates && data.candidates[0]?.content?.parts && data.candidates[0].content.parts[0]?.text) {
                         const translatedText = data.candidates[0].content.parts[0].text;
                         translationResultArea.value = translatedText;
+                        
+                        // 발음 가이드 기능이 활성화되어 있다면 발음 가이드 생성
+                        if (isPronunciationGuideEnabled) {
+                            // 한국어 번역인 경우 발음 가이드가 필요 없음
+                            if (targetLanguage !== 'ko') {
+                                generatePronunciationGuide(translatedText, targetLanguage, sourceLanguage);
+                            } else {
+                                pronunciationGuide.textContent = '한국어 번역에는 발음 가이드가 필요하지 않습니다.';
+                            }
+                        }
                     } else {
                         throw new Error('번역 결과를 받지 못했습니다.');
                     }
                 } else {
                     // 사전에서 변환된 텍스트가 있으면 즉시 표시
                     translationResultArea.value = dictionaryApplied;
+                    
+                    // 발음 가이드 기능이 활성화되어 있다면 발음 가이드 생성
+                    if (isPronunciationGuideEnabled && targetLanguage !== 'ko') {
+                        generatePronunciationGuide(dictionaryApplied, targetLanguage, sourceLanguage);
+                    }
                 }
 
             } catch (error) {
@@ -1175,6 +1461,9 @@
         window.addEventListener('DOMContentLoaded', () => {
             loadDictionary();
             
+            // 설정 로드 추가
+            loadSettings();
+            
             // 언어 자동 감지 UI 초기설정
             if (sourceLanguageSelect.value === 'auto' && sourceTextarea.value.trim()) {
                 detectLanguage(sourceTextarea.value);
@@ -1184,7 +1473,6 @@
             tabs.forEach(tab => {
                 tab.addEventListener('click', () => {
                     const tabId = tab.getAttribute('data-tab');
-                    console.log("탭 클릭:", tabId); // 디버깅용
                     
                     // 현재 활성화된 탭과 콘텐츠의 활성 클래스 제거
                     tabs.forEach(t => t.classList.remove('active'));
